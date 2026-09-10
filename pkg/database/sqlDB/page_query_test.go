@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/types"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,7 +19,7 @@ func TestPageQueryWithoutInitialize(t *testing.T) {
 
 		result, err := NewPageQuery[User](context.Background(), page, query_base).Execute()
 
-		assert.Error(t, err, db_not_initialized_error)
+		assert.Error(t, err, dbNotInitializedError)
 		assert.Nil(t, result)
 	})
 }
@@ -35,14 +35,14 @@ func TestPageQuery(t *testing.T) {
 	t.Run("Should return error when execute page query without page info", func(t *testing.T) {
 		result, err := NewPageQuery[User](ctx, nil, query_base).Execute()
 
-		assert.Error(t, err, page_is_empty_error)
+		assert.Error(t, err, pageIsEmptyError)
 		assert.Nil(t, result)
 	})
 
 	t.Run("Should return error when execute page query without query", func(t *testing.T) {
 		result, err := NewPageQuery[User](ctx, page, "").Execute()
 
-		assert.Error(t, err, query_is_empty_error)
+		assert.Error(t, err, queryIsEmptyError)
 		assert.Nil(t, result)
 	})
 
@@ -51,7 +51,7 @@ func TestPageQuery(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
-		assert.Equal(t, "OTHER USER", result.Content[0].Name)
-		assert.Equal(t, uint64(2), result.TotalElements)
+		assert.Equal(t, "OTHER USER", result.Items[0].Name)
+		assert.Equal(t, uint64(2), result.TotalItems)
 	})
 }

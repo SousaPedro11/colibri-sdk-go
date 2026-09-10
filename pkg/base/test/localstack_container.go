@@ -3,21 +3,20 @@ package test
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/config"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/logging"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/mount"
-	"github.com/docker/go-connections/nat"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/config"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
 	"github.com/google/uuid"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/mount"
+	"github.com/moby/moby/api/types/network"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 const (
-	localstackDockerImage = "localstack/localstack:3.1"
+	localstackDockerImage = "localstack/localstack:4"
 	localstackSvcPort     = "4566"
 )
 
@@ -28,18 +27,17 @@ var (
 type LocalstackContainer struct {
 	lsContainerRequest *testcontainers.ContainerRequest
 	lsContainer        testcontainers.Container
-	ctx                context.Context
 }
 
 func UseLocalstackContainer(ctx context.Context, configPath string) *LocalstackContainer {
 	if localstackContainerInstance == nil {
-		localstackContainerInstance = newLocalstackContainer(ctx, configPath)
-		localstackContainerInstance.start()
+		localstackContainerInstance = newLocalstackContainer(configPath)
+		localstackContainerInstance.start(ctx)
 	}
 	return localstackContainerInstance
 }
 
-func newLocalstackContainer(ctx context.Context, configPath string) *LocalstackContainer {
+func newLocalstackContainer(configPath string) *LocalstackContainer {
 	req := &testcontainers.ContainerRequest{
 		Image:        localstackDockerImage,
 		ExposedPorts: []string{localstackSvcPort},
@@ -66,32 +64,31 @@ func newLocalstackContainer(ctx context.Context, configPath string) *LocalstackC
 		),
 	}
 
-	return &LocalstackContainer{lsContainerRequest: req, ctx: ctx}
+	return &LocalstackContainer{lsContainerRequest: req}
 }
 
-func (c *LocalstackContainer) start() {
+func (c *LocalstackContainer) start(ctx context.Context) {
 	var err error
-	c.lsContainer, err = testcontainers.GenericContainer(c.ctx, testcontainers.GenericContainerRequest{
+	c.lsContainer, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: *c.lsContainerRequest,
 		Started:          true,
 	})
 	if err != nil {
-		logging.Fatal(err.Error())
+		logging.Fatal(ctx).Err(err).Msg("could not start the test localstack container")
 	}
 
-	localstackPort, err := c.lsContainer.MappedPort(c.ctx, localstackSvcPort)
+	localstackPort, err := c.lsContainer.MappedPort(ctx, localstackSvcPort)
 	if err != nil {
-		logging.Fatal(err.Error())
+		logging.Fatal(ctx).Err(err).Msg("could not get the mapped port of the test localstack container")
 	}
 
-	log.Printf("Test localstack started at port: %s", localstackPort)
+	logging.Info(ctx).Msgf("Test localstack started at port: %s", localstackPort)
 	c.setEnv(localstackPort)
 }
 
-func (c *LocalstackContainer) setEnv(port nat.Port) {
-	os.Setenv(config.ENV_CLOUD_HOST, fmt.Sprintf("http://localhost:%s", port.Port()))
-	os.Setenv(config.ENV_CLOUD_REGION, "us-east-1")
-	os.Setenv(config.ENV_CLOUD_SECRET, "no_secret")
-	os.Setenv(config.ENV_CLOUD_TOKEN, "no_token")
-	os.Setenv(config.ENV_CLOUD_DISABLE_SSL, "true")
+func (c *LocalstackContainer) setEnv(port network.Port) {
+	_ = os.Setenv(config.ENV_CLOUD_HOST, fmt.Sprintf("http://localhost:%s", port.Port()))
+	_ = os.Setenv(config.ENV_CLOUD_REGION, "us-east-1")
+	_ = os.Setenv(config.ENV_CLOUD_SECRET, "no_secret")
+	_ = os.Setenv(config.ENV_CLOUD_TOKEN, "no_token")
 }

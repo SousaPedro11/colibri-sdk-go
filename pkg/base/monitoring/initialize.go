@@ -2,70 +2,80 @@ package monitoring
 
 import (
 	"context"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/config"
-	colibri_monitoring_base "github.com/colibri-project-io/colibri-sdk-go/pkg/base/monitoring/colibri-monitoring-base"
-	colibri_nr "github.com/colibri-project-io/colibri-sdk-go/pkg/base/monitoring/colibri-nr"
-	colibri_otel "github.com/colibri-project-io/colibri-sdk-go/pkg/base/monitoring/colibri-otel"
-	"net/http"
+
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/config"
+	colibrimonitoringbase "github.com/colibriproject-dev/colibri-sdk-go/pkg/base/monitoring/colibri-monitoring-base"
+	colibriotel "github.com/colibriproject-dev/colibri-sdk-go/pkg/base/monitoring/colibri-otel"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/observer"
 )
 
-var instance colibri_monitoring_base.Monitoring
+var instance colibrimonitoringbase.Monitoring
 
 // Initialize loads the Monitoring settings according to the configured environment.
 func Initialize() {
-	if useNRMonitoring() {
-		instance = colibri_nr.StartNewRelicMonitoring()
-	} else if useOTELMonitoring() {
-		instance = colibri_otel.StartOpenTelemetryMonitoring()
+	if UseOTELMonitoring() {
+		instance = colibriotel.StartOpenTelemetryMonitoring()
+		observer.Attach(instance.(observer.Observer))
 	} else {
-		instance = colibri_monitoring_base.NewOthers()
+		instance = colibrimonitoringbase.NewOthers()
 	}
 }
 
-func useOTELMonitoring() bool {
+// UseOTELMonitoring returns true if OTEL monitoring is enabled
+func UseOTELMonitoring() bool {
 	return config.OTEL_EXPORTER_OTLP_ENDPOINT != ""
 }
 
-func useNRMonitoring() bool {
-	return config.NEW_RELIC_LICENSE != ""
+// StartTransaction start a transaction in context with name
+func StartTransaction(ctx context.Context, name string, kind colibrimonitoringbase.SpanKind) (any, context.Context) {
+	return instance.StartTransaction(ctx, name, kind)
 }
 
-// StartTransaction start a transaction in context with name
-func StartTransaction(ctx context.Context, name string) (interface{}, context.Context) {
-	return instance.StartTransaction(ctx, name)
+func AddTransactionAttribute(transaction any, key, value string) {
+	instance.AddTransactionAttribute(transaction, key, value)
 }
 
 // EndTransaction ends the transaction
-func EndTransaction(transaction interface{}) {
+func EndTransaction(transaction any) {
 	instance.EndTransaction(transaction)
 }
 
-// StartWebRequest sets a web request config inside transaction
-func StartWebRequest(ctx context.Context, header http.Header, path string, method string) (interface{}, context.Context) {
-	return instance.StartWebRequest(ctx, header, path, method)
-}
-
 // StartTransactionSegment start a transaction segment inside opened transaction with name and atributes
-func StartTransactionSegment(ctx context.Context, name string, attributes map[string]string) interface{} {
+func StartTransactionSegment(ctx context.Context, name string, attributes map[string]string) any {
 	return instance.StartTransactionSegment(ctx, name, attributes)
 }
 
 // EndTransactionSegment ends the transaction segment
-func EndTransactionSegment(segment interface{}) {
+func EndTransactionSegment(segment any) {
 	instance.EndTransactionSegment(segment)
 }
 
 // GetTransactionInContext returns transaction inside a context
-func GetTransactionInContext(ctx context.Context) interface{} {
+func GetTransactionInContext(ctx context.Context) any {
 	return instance.GetTransactionInContext(ctx)
 }
 
 // NoticeError notices an error in Monitoring provider
-func NoticeError(transaction interface{}, err error) {
+func NoticeError(transaction any, err error) {
 	instance.NoticeError(transaction, err)
 }
 
 // GetSQLDBDriverName return driver name for monitoring provider
 func GetSQLDBDriverName() string {
 	return instance.GetSQLDBDriverName()
+}
+
+// Counter returns a named counter instrument for recording monotonically increasing values.
+func Counter(name, description, unit string) colibrimonitoringbase.Counter {
+	return instance.Counter(name, description, unit)
+}
+
+// Histogram returns a named histogram instrument for recording value distributions.
+func Histogram(name, description, unit string) colibrimonitoringbase.HistogramRecorder {
+	return instance.Histogram(name, description, unit)
+}
+
+// Gauge returns a named gauge instrument for recording current values.
+func Gauge(name, description, unit string) colibrimonitoringbase.GaugeRecorder {
+	return instance.Gauge(name, description, unit)
 }

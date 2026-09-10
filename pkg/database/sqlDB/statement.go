@@ -10,16 +10,16 @@ import (
 type Statement struct {
 	ctx   context.Context
 	query string
-	args  []interface{}
+	args  []any
 }
 
 // NewStatement creates a new pointer to Statement struct.
 //
 // ctx: the context.Context for the statement
 // query: the query string for the statement
-// params: variadic interface{} for additional parameters
+// params: variadic any for additional parameters
 // Returns a pointer to Statement struct
-func NewStatement(ctx context.Context, query string, params ...interface{}) *Statement {
+func NewStatement(ctx context.Context, query string, params ...any) *Statement {
 	return &Statement{ctx, query, params}
 }
 
@@ -46,7 +46,7 @@ func (s *Statement) ExecuteInInstance(instance *sql.DB) error {
 	}
 	defer closer(stmt)
 
-	if _, err = stmt.Exec(s.args...); err != nil {
+	if _, err = stmt.ExecContext(s.ctx, s.args...); err != nil {
 		return err
 	}
 
@@ -59,11 +59,11 @@ func (s *Statement) ExecuteInInstance(instance *sql.DB) error {
 // Returns an error.
 func (s *Statement) validate(instance *sql.DB) error {
 	if instance == nil {
-		return errors.New(db_not_initialized_error)
+		return errors.New(dbNotInitializedError)
 	}
 
 	if s.query == "" {
-		return errors.New(query_is_empty_error)
+		return errors.New(queryIsEmptyError)
 	}
 
 	return nil

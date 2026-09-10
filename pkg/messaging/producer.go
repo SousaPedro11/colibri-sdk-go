@@ -2,13 +2,12 @@ package messaging
 
 import (
 	"context"
-	"errors"
-	"runtime/debug"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/config"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/logging"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/monitoring"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/security"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/config"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/monitoring"
+	colibrimonitoringbase "github.com/colibriproject-dev/colibri-sdk-go/pkg/base/monitoring/colibri-monitoring-base"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/security"
 	"github.com/google/uuid"
 )
 
@@ -21,40 +20,35 @@ func NewProducer(topicName string) *Producer {
 }
 
 func (p *Producer) Publish(ctx context.Context, action string, message any) error {
-	if instance == nil {
-		return errors.New("messaging has not been initialized. add in main.go `messaging.Initialize()`")
+	// read once through the accessor: the module may be swapped or shut down while a handler
+	// still draining publishes, and a direct read of the global would race with it
+	provider := moduleInstance()
+	if provider == nil {
+		logging.Fatal(context.Background()).Msg(messagingNotInitialized)
 	}
-	txn := monitoring.GetTransactionInContext(ctx)
 
-	defer func() {
-		if r := recover(); r != nil {
-			logging.Error("panic recovering publish topic %s: \n%s", p.topic, string(debug.Stack()))
-			monitoring.NoticeError(txn, r.(error))
-		}
-	}()
-
-	if txn != nil {
-		segment := monitoring.StartTransactionSegment(ctx, messaging_producer_transaction, map[string]string{
-			"topic": p.topic,
-		})
-		defer monitoring.EndTransactionSegment(segment)
+	correlationID := ctx.Value(logging.CorrelationIDParam)
+	if correlationID == nil {
+		correlationID = uuid.New().String()
 	}
+
+	txn, _ := monitoring.StartTransaction(ctx, messagingProducerTransaction, colibrimonitoringbase.SpanKindProducer)
+	monitoring.AddTransactionAttribute(txn, "topic", p.topic)
+	monitoring.AddTransactionAttribute(txn, "correlationId", correlationID.(string))
+	monitoring.AddTransactionAttribute(txn, "action", action)
+	defer monitoring.EndTransaction(txn)
 
 	msg := &ProviderMessage{
-		Id:      uuid.New(),
-		Origin:  config.APP_NAME,
-		Action:  action,
-		Message: message,
+		ID:            uuid.New(),
+		Origin:        config.APP_NAME,
+		Action:        action,
+		Message:       message,
+		AuthContext:   security.GetAuthenticationContext(ctx),
+		CorrelationID: correlationID.(string),
 	}
 
-	authContext := security.GetAuthenticationContext(ctx)
-	if authContext != nil {
-		msg.TenantId = authContext.GetTenantID()
-		msg.UserId = authContext.GetUserID()
-	}
-
-	if err := instance.producer(ctx, p, msg); err != nil {
-		logging.Error("Could not send message with id %s to topic %s. Error: %v", msg.Id, p.topic, err)
+	if err := provider.producer(ctx, p, msg); err != nil {
+		logging.Error(ctx).Err(err).Msgf(couldNotSendMsg, msg.ID, p.topic)
 		monitoring.NoticeError(txn, err)
 		return err
 	}

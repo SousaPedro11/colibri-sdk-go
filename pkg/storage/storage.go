@@ -5,14 +5,16 @@ import (
 	"mime/multipart"
 	"os"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/config"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/logging"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/monitoring"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/config"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/monitoring"
 )
 
 const (
-	storage_transaction = "Storage"
-	connection_error    = "An error occurred when trying to connect to the storage provider. Error: %s"
+	storageTransactionMsg      string = "Storage"
+	storageAlreadyConnectedMsg string = "storage provider already connected"
+	storageConnectedMsg        string = "storage provider connected"
+	connectionErrorMsg         string = "an error occurred when trying to connect to the storage provider"
 )
 
 type storage interface {
@@ -23,11 +25,13 @@ type storage interface {
 
 var instance storage
 
-// Initialize initializes the storage provider based on the configured cloud.
-//
-// No parameters.
-// No return values.
+// Initialize initializes the storage provider based on the configured cloud provider.
 func Initialize() {
+	if instance != nil {
+		logging.Info(context.Background()).Msg(storageAlreadyConnectedMsg)
+		return
+	}
+
 	switch config.CLOUD {
 	case config.CLOUD_AWS:
 		instance = newAwsStorage()
@@ -35,19 +39,14 @@ func Initialize() {
 		instance = newGcpStorage()
 	}
 
-	logging.Info("Storage provider connected")
+	logging.Info(context.Background()).Msg(storageConnectedMsg)
 }
 
 // DownloadFile downloads a file from the storage provider.
-//
-// ctx: the context for the operation.
-// bucket: the storage bucket from which the file is downloaded.
-// key: the key or identifier of the file to be downloaded.
-// Returns a file pointer and an error.
 func DownloadFile(ctx context.Context, bucket, key string) (*os.File, error) {
 	txn := monitoring.GetTransactionInContext(ctx)
 	if txn != nil {
-		segment := monitoring.StartTransactionSegment(ctx, storage_transaction, map[string]string{
+		segment := monitoring.StartTransactionSegment(ctx, storageTransactionMsg, map[string]string{
 			"method": "Download",
 			"bucket": bucket,
 			"key":    key,
@@ -59,16 +58,10 @@ func DownloadFile(ctx context.Context, bucket, key string) (*os.File, error) {
 }
 
 // UploadFile uploads a file to the storage provider.
-//
-// ctx: the context for the operation.
-// bucket: the storage bucket to upload the file to.
-// key: the key or identifier of the file to be uploaded.
-// file: the file to be uploaded.
-// Returns the location of the uploaded file and an error, if any.
 func UploadFile(ctx context.Context, bucket, key string, file *multipart.File) (string, error) {
 	txn := monitoring.GetTransactionInContext(ctx)
 	if txn != nil {
-		segment := monitoring.StartTransactionSegment(ctx, storage_transaction, map[string]string{
+		segment := monitoring.StartTransactionSegment(ctx, storageTransactionMsg, map[string]string{
 			"method": "Upload",
 			"bucket": bucket,
 			"key":    key,
@@ -80,15 +73,10 @@ func UploadFile(ctx context.Context, bucket, key string, file *multipart.File) (
 }
 
 // DeleteFile deletes a file from the storage provider.
-//
-// ctx: the context for the operation.
-// bucket: the storage bucket from which the file is deleted.
-// key: the key or identifier of the file to be deleted.
-// Returns an error.
 func DeleteFile(ctx context.Context, bucket, key string) error {
 	txn := monitoring.GetTransactionInContext(ctx)
 	if txn != nil {
-		segment := monitoring.StartTransactionSegment(ctx, storage_transaction, map[string]string{
+		segment := monitoring.StartTransactionSegment(ctx, storageTransactionMsg, map[string]string{
 			"method": "Delete",
 			"bucket": bucket,
 			"key":    key,

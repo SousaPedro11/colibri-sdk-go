@@ -1,14 +1,20 @@
 package cloud
 
 import (
-	firebase "firebase.google.com/go"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/config"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/logging"
+	"context"
+
+	firebase "firebase.google.com/go/v4"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/config"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
 )
 
+// Cloud is a struct that contains the cloud settings.
 type Cloud struct {
-	aws      *session.Session
+	awsConfig *aws.Config
+	awsARN    *arn.ARN
+
 	firebase *firebase.App
 }
 
@@ -20,22 +26,28 @@ func Initialize() {
 
 	switch config.CLOUD {
 	case config.CLOUD_AWS:
-		instance.aws = newAwsSession()
+		instance.awsConfig = newAwsConfig()
+		instance.awsARN = getAwsARN()
 	case config.CLOUD_FIREBASE:
 		instance.firebase = newFirebaseSession()
 	case config.CLOUD_GCP:
-		logging.Info("Initializing GCP")
-	case config.CLOUD_AZURE:
-		logging.Fatal("Not implemented yet")
+		logging.Info(context.Background()).Msg("Initializing GCP")
 	}
 
-	logging.Info("Cloud provider connected")
+	logging.Info(context.Background()).Msg("Cloud provider connected")
 }
 
-func GetAwsSession() *session.Session {
-	return instance.aws
+// GetAwsConfig returns the AWS configuration used to build service clients.
+func GetAwsConfig() aws.Config {
+	return *instance.awsConfig
 }
 
+// GetAwsARN returns the AWS ARN.
+func GetAwsARN() *arn.ARN {
+	return instance.awsARN
+}
+
+// GetFirebaseSession returns the Firebase session.
 func GetFirebaseSession() *firebase.App {
 	return instance.firebase
 }

@@ -1,14 +1,16 @@
 package restserver
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/config"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/logging"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/swagger"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/config"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/monitoring"
+	swagger "github.com/gofiber/contrib/v3/swaggo"
+	"github.com/gofiber/fiber/v3"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/valyala/fasthttp/fasthttpadaptor"
 )
@@ -23,9 +25,8 @@ func createFiberServer() Server {
 
 func (f *fiberWebServer) initialize() {
 	f.srv = fiber.New(fiber.Config{
-		ServerHeader:          "colibri-sdk-go",
-		AppName:               config.APP_NAME,
-		DisableStartupMessage: true,
+		ServerHeader: "colibri-sdk-go",
+		AppName:      config.APP_NAME,
 	})
 }
 
@@ -34,8 +35,13 @@ func (f *fiberWebServer) shutdown() error {
 }
 
 func (f *fiberWebServer) injectMiddlewares() {
-	f.srv.Use(newRelicFiberMiddleware())
+	if monitoring.UseOTELMonitoring() {
+		f.srv.Use(newOpenTelemetryFiberMiddleware())
+		f.srv.Use(httpMetricsFiberMiddleware())
+	}
+	f.srv.Use(correlationIdMiddleware())
 	f.srv.Use(accessControlFiberMiddleware())
+	f.srv.Use(panicRecoverMiddleware())
 	if customAuth != nil {
 		f.srv.Use(customAuthenticationContextFiberMiddleware())
 	} else {
@@ -79,40 +85,36 @@ func (f *fiberWebServer) injectRoutes() {
 		fn := route.Function
 		beforeEnter := route.BeforeEnter
 
-		f.srv.Add(route.Method, routeUri, func(ctx *fiber.Ctx) error {
-			webContext := newFiberWebContext(ctx)
+		f.srv.Add([]string{route.Method}, routeUri, func(fctx fiber.Ctx) error {
+			fctx.Set(parameterizedURLHeaderKey, routeUri)
+			webContext := newFiberWebContext(fctx)
 			if beforeEnter != nil {
 				if err := beforeEnter(webContext); err != nil {
-					ctx.Status(err.StatusCode)
-					return ctx.JSON(Error{err.Err.Error()})
+					fctx.Status(err.StatusCode)
+					return fctx.JSON(Error{err.Err.Error()})
 				}
 			}
 
 			fn(webContext)
 			return nil
-		})
+		}).Name(routeUri)
 
-		logging.Info("Registered route [%7s] %s", route.Method, string(route.Prefix)+route.URI)
+		logging.
+			Info(context.Background()).
+			Msgf("Registered route [%7s] %s", route.Method, string(route.Prefix)+route.URI)
 	}
 }
 
 func (f *fiberWebServer) listenAndServe() error {
-	defer func() {
-		if p := recover(); p != nil {
-			logging.Error("panic recovering: %v", p)
-		}
-	}()
-
-	addr := fmt.Sprintf(":%d", config.PORT)
-	return f.srv.Listen(addr)
+	return f.srv.Listen(fmt.Sprintf(":%d", config.PORT), fiber.ListenConfig{DisableStartupMessage: true})
 }
 
 func (f *fiberWebServer) addMetricsRoute() {
 	const route = "/metrics"
 
 	p := fasthttpadaptor.NewFastHTTPHandler(promhttp.Handler())
-	f.srv.Get(route, func(c *fiber.Ctx) error {
-		p(c.Context())
+	f.srv.Get(route, func(c fiber.Ctx) error {
+		p(c.RequestCtx())
 		return nil
 	})
 }
@@ -124,7 +126,7 @@ func (f *fiberWebServer) addSwaggerUI() {
 }
 
 func (f *fiberWebServer) registerCustomMiddleware(m CustomMiddleware) {
-	fn := func(ctx *fiber.Ctx) error {
+	fn := func(ctx fiber.Ctx) error {
 		webCtx := &fiberWebContext{ctx: ctx}
 		if err := m.Apply(webCtx); err != nil {
 			ctx.Status(err.StatusCode)

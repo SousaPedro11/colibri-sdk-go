@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"strconv"
 
@@ -18,9 +17,9 @@ const (
 	ENV_APP_TYPE    string = "APP_TYPE"
 	ENV_CLOUD       string = "CLOUD"
 
-	ENV_NEW_RELIC_LICENSE           string = "NEW_RELIC_LICENSE"
-	ENV_OTEL_EXPORTER_OTLP_ENDPOINT string = "OTEL_EXPORTER_OTLP_ENDPOINT"
-	ENV_OTEL_EXPORTER_OTLP_HEADERS  string = "OTEL_EXPORTER_OTLP_HEADERS"
+	ENV_OTEL_EXPORTER_OTLP_ENDPOINT         string = "OTEL_EXPORTER_OTLP_ENDPOINT"
+	ENV_OTEL_EXPORTER_OTLP_HEADERS          string = "OTEL_EXPORTER_OTLP_HEADERS"
+	ENV_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT string = "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"
 
 	ENV_PORT                  string = "PORT"
 	ENV_SQL_DB_MIGRATION      string = "SQL_DB_MIGRATION"
@@ -28,7 +27,8 @@ const (
 	ENV_CLOUD_REGION          string = "CLOUD_REGION"
 	ENV_CLOUD_SECRET          string = "CLOUD_SECRET"
 	ENV_CLOUD_TOKEN           string = "CLOUD_TOKEN"
-	ENV_CLOUD_DISABLE_SSL     string = "CLOUD_DISABLE_SSL"
+	ENV_CLOUD_DISABLE_SSL     string = "CLOUD_DISABLE_SSL" // Deprecated: no effect on aws-sdk-go-v2; the scheme comes from CLOUD_HOST
+	ENV_CLOUD_AWS_ROLE_ARN    string = "CLOUD_AWS_ROLE_ARN"
 	ENV_CACHE_URI             string = "CACHE_URI"
 	ENV_CACHE_PASSWORD        string = "CACHE_PASSWORD"
 	ENV_SQL_DB_NAME           string = "SQL_DB_NAME"
@@ -40,6 +40,14 @@ const (
 	ENV_SQL_DB_MAX_OPEN_CONNS string = "SQL_DB_MAX_OPEN_CONNS"
 	ENV_SQL_DB_MAX_IDLE_CONNS string = "SQL_DB_MAX_IDLE_CONNS"
 	ENV_LOG_LEVEL             string = "LOG_LEVEL"
+	ENV_COLIBRI_MESSAGING     string = "COLIBRI_MESSAGING"
+
+	ENV_CORS_ALLOW_ORIGINS     string = "CORS_ALLOW_ORIGINS"
+	ENV_CORS_ALLOW_METHODS     string = "CORS_ALLOW_METHODS"
+	ENV_CORS_ALLOW_HEADERS     string = "CORS_ALLOW_HEADERS"
+	ENV_CORS_EXPOSE_HEADERS    string = "CORS_EXPOSE_HEADERS"
+	ENV_CORS_ALLOW_CREDENTIALS string = "CORS_ALLOW_CREDENTIALS"
+	ENV_CORS_MAX_AGE           string = "CORS_MAX_AGE"
 
 	// Environment values
 	ENVIRONMENT_PRODUCTION        string = "production"
@@ -48,21 +56,23 @@ const (
 	ENVIRONMENT_TEST              string = "test"
 	APP_TYPE_SERVICE              string = "service"
 	APP_TYPE_SERVERLESS           string = "serverless"
+	APP_TYPE_CLI                  string = "cli"
 	CLOUD_AWS                     string = "aws"
-	CLOUD_AZURE                   string = "azure"
 	CLOUD_GCP                     string = "gcp"
 	CLOUD_FIREBASE                string = "firebase"
+	CLOUD_NONE                    string = "none"
+	MESSAGING_CLOUD_DEFAULT       string = "CLOUD_DEFAULT"
+	MESSAGING_RABBITMQ            string = "RABBITMQ"
 	SQL_DB_CONNECTION_URI_DEFAULT string = "host=%s port=%s user=%s password=%s dbname=%s application_name='%s' sslmode=%s"
-	VERSION                              = "v0.0.1"
+	VERSION                              = "v0.2.5"
 
-	// Errors
-	error_enviroment_not_configured                 string = "environment is not configured. Set production, sandbox, development or test"
-	error_app_name_not_configured                   string = "app name is not configured"
-	error_app_type_not_configured                   string = "app type is not configured. Set service or serverless"
-	error_cloud_not_configured                      string = "cloud is not configured. Set aws, azure, gcp or firebase"
-	error_production_required_params_not_configured string = "production required params not configured. Set NEW_RELIC_LICENSE"
-	error_integer_parse                             string = "could not parse %s, permitted int value, got %v: %w"
-	error_boolean_parse                             string = "could not parse %s, permitted 'true' or 'false', got %v: %w"
+	// Errors messages
+	errorEnvironmentNotConfiguredMsg string = "environment is not configured. Set production, sandbox, development or test"
+	errorAppNameNotConfiguredMsg     string = "app name is not configured"
+	errorAppTypeNotConfiguredMsg     string = "app type is not configured. Set service, serverless or cli"
+	errorCloudNotConfiguredMsg       string = "cloud is not configured. Set aws, azure, gcp, firebase or none"
+	errorParsingIntegerMsg           string = "could not parse %s, permitted int value, got %v: %w"
+	errorParsingBooleanMsg           string = "could not parse %s, permitted 'true' or 'false', got %v: %w"
 )
 
 var (
@@ -72,21 +82,19 @@ var (
 	APP_VERSION                = ""
 	WAIT_GROUP_TIMEOUT_SECONDS = 90 // 1.5 minutes
 
-	NEW_RELIC_LICENSE           = ""
-	OTEL_EXPORTER_OTLP_ENDPOINT = ""
-	OTEL_EXPORTER_OTLP_HEADERS  = ""
+	OTEL_EXPORTER_OTLP_ENDPOINT         = ""
+	OTEL_EXPORTER_OTLP_HEADERS          = ""
+	OTEL_EXPORTER_OTLP_METRICS_ENDPOINT = ""
 
 	PORT = 8080
 
-	LOG_LEVEL            = "info"
-	LOG_OUTPUT io.Writer = os.Stdout
-
-	CLOUD             = ""
-	CLOUD_HOST        = ""
-	CLOUD_REGION      = ""
-	CLOUD_SECRET      = ""
-	CLOUD_TOKEN       = ""
-	CLOUD_DISABLE_SSL = true
+	CLOUD              = ""
+	CLOUD_HOST         = ""
+	CLOUD_REGION       = ""
+	CLOUD_SECRET       = ""
+	CLOUD_TOKEN        = ""
+	CLOUD_DISABLE_SSL  = true // Deprecated: read and validated, but no longer applied. See ENV_CLOUD_DISABLE_SSL.
+	CLOUD_AWS_ROLE_ARN = ""
 
 	SQL_DB_NAME           = ""
 	SQL_DB_CONNECTION_URI = ""
@@ -94,41 +102,46 @@ var (
 	SQL_DB_MAX_OPEN_CONNS = 10
 	SQL_DB_MAX_IDLE_CONNS = 3
 
+	COLIBRI_MESSAGING = MESSAGING_CLOUD_DEFAULT
+
 	CACHE_URI      = ""
 	CACHE_PASSWORD = ""
+
+	CORS_ALLOW_ORIGINS     = "*"
+	CORS_ALLOW_METHODS     = "OPTIONS, GET, POST, PUT, PATCH, DELETE"
+	CORS_ALLOW_HEADERS     = "Origin, Content-Type, Authorization, X-User-Id, X-Tenant-Id"
+	CORS_EXPOSE_HEADERS    = ""
+	CORS_ALLOW_CREDENTIALS = false
+	CORS_MAX_AGE           = 0
 )
 
 // Load loads and validates all environment variables. It's used in app initialization.
 func Load() error {
-	godotenv.Load()
+	_ = godotenv.Load()
 
 	ENVIRONMENT = os.Getenv(ENV_ENVIRONMENT)
 	if !slices.Contains([]string{ENVIRONMENT_PRODUCTION, ENVIRONMENT_SANDBOX, ENVIRONMENT_DEVELOPMENT, ENVIRONMENT_TEST}, ENVIRONMENT) {
-		return errors.New(error_enviroment_not_configured)
+		return errors.New(errorEnvironmentNotConfiguredMsg)
 	}
 
 	APP_NAME = os.Getenv(ENV_APP_NAME)
 	if APP_NAME == "" {
-		return errors.New(error_app_name_not_configured)
+		return errors.New(errorAppNameNotConfiguredMsg)
 	}
 
 	APP_TYPE = os.Getenv(ENV_APP_TYPE)
-	if !slices.Contains([]string{APP_TYPE_SERVICE, APP_TYPE_SERVERLESS}, APP_TYPE) {
-		return errors.New(error_app_type_not_configured)
+	if !slices.Contains([]string{APP_TYPE_SERVICE, APP_TYPE_SERVERLESS, APP_TYPE_CLI}, APP_TYPE) {
+		return errors.New(errorAppTypeNotConfiguredMsg)
 	}
 
 	CLOUD = os.Getenv(ENV_CLOUD)
-	if !slices.Contains([]string{CLOUD_AWS, CLOUD_AZURE, CLOUD_GCP, CLOUD_FIREBASE}, CLOUD) {
-		return errors.New(error_cloud_not_configured)
+	if !slices.Contains([]string{CLOUD_AWS, CLOUD_GCP, CLOUD_FIREBASE, CLOUD_NONE}, CLOUD) {
+		return errors.New(errorCloudNotConfiguredMsg)
 	}
 
-	NEW_RELIC_LICENSE = os.Getenv(ENV_NEW_RELIC_LICENSE)
 	OTEL_EXPORTER_OTLP_ENDPOINT = os.Getenv(ENV_OTEL_EXPORTER_OTLP_ENDPOINT)
 	OTEL_EXPORTER_OTLP_HEADERS = os.Getenv(ENV_OTEL_EXPORTER_OTLP_HEADERS)
-
-	if logLevel := os.Getenv(ENV_LOG_LEVEL); logLevel != "" {
-		LOG_LEVEL = logLevel
-	}
+	OTEL_EXPORTER_OTLP_METRICS_ENDPOINT = os.Getenv(ENV_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT)
 
 	if err := convertIntEnv(&PORT, ENV_PORT); err != nil {
 		return err
@@ -154,10 +167,18 @@ func Load() error {
 		return err
 	}
 
+	if messagingEnv := os.Getenv(ENV_COLIBRI_MESSAGING); messagingEnv != "" {
+		if messagingEnv != MESSAGING_CLOUD_DEFAULT && messagingEnv != MESSAGING_RABBITMQ {
+			return fmt.Errorf("invalid COLIBRI_MESSAGING value: %s. Allowed values: %s, %s", messagingEnv, MESSAGING_CLOUD_DEFAULT, MESSAGING_RABBITMQ)
+		}
+		COLIBRI_MESSAGING = messagingEnv
+	}
+
 	CLOUD_HOST = os.Getenv(ENV_CLOUD_HOST)
 	CLOUD_REGION = os.Getenv(ENV_CLOUD_REGION)
 	CLOUD_SECRET = os.Getenv(ENV_CLOUD_SECRET)
 	CLOUD_TOKEN = os.Getenv(ENV_CLOUD_TOKEN)
+	CLOUD_AWS_ROLE_ARN = os.Getenv(ENV_CLOUD_AWS_ROLE_ARN)
 
 	CACHE_URI = os.Getenv(ENV_CACHE_URI)
 	CACHE_PASSWORD = os.Getenv(ENV_CACHE_PASSWORD)
@@ -172,6 +193,32 @@ func Load() error {
 		APP_NAME,
 		os.Getenv(ENV_SQL_DB_SSL_MODE))
 
+	if err := configCors(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func configCors() error {
+	if v := os.Getenv(ENV_CORS_ALLOW_ORIGINS); v != "" {
+		CORS_ALLOW_ORIGINS = v
+	}
+	if v := os.Getenv(ENV_CORS_ALLOW_METHODS); v != "" {
+		CORS_ALLOW_METHODS = v
+	}
+	if v := os.Getenv(ENV_CORS_ALLOW_HEADERS); v != "" {
+		CORS_ALLOW_HEADERS = v
+	}
+	if v := os.Getenv(ENV_CORS_EXPOSE_HEADERS); v != "" {
+		CORS_EXPOSE_HEADERS = v
+	}
+	if err := convertBoolEnv(&CORS_ALLOW_CREDENTIALS, ENV_CORS_ALLOW_CREDENTIALS); err != nil {
+		return err
+	}
+	if err := convertIntEnvWithDefault(&CORS_MAX_AGE, ENV_CORS_MAX_AGE, CORS_MAX_AGE); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -180,7 +227,7 @@ func convertBoolEnv(env *bool, envName string) error {
 	if envString := os.Getenv(envName); envString != "" {
 		var err error
 		if *env, err = strconv.ParseBool(envString); err != nil {
-			return fmt.Errorf(error_boolean_parse, envName, envString, err)
+			return fmt.Errorf(errorParsingBooleanMsg, envName, envString, err)
 		}
 	}
 	return nil
@@ -191,7 +238,7 @@ func convertIntEnv(env *int, envName string) error {
 	if envString := os.Getenv(envName); envString != "" {
 		var err error
 		if *env, err = strconv.Atoi(envString); err != nil {
-			return fmt.Errorf(error_integer_parse, envName, envString, err)
+			return fmt.Errorf(errorParsingIntegerMsg, envName, envString, err)
 		}
 	}
 	return nil
@@ -202,7 +249,7 @@ func convertIntEnvWithDefault(env *int, envName string, fallback int) error {
 	envString := getEnvWithDefault(envName, fallback)
 	var err error
 	if *env, err = strconv.Atoi(envString); err != nil {
-		return fmt.Errorf(error_integer_parse, envName, envString, err)
+		return fmt.Errorf(errorParsingIntegerMsg, envName, envString, err)
 	}
 	return nil
 }
@@ -216,32 +263,32 @@ func getEnvWithDefault(key string, defaultValue int) string {
 	return value
 }
 
-// IsProductionEnvironment returns a boolean if is production environment.
+// IsProductionEnvironment returns true if the current environment is production.
 func IsProductionEnvironment() bool {
 	return ENVIRONMENT == ENVIRONMENT_PRODUCTION
 }
 
-// IsSandboxEnvironment returns a boolean if is sandbox environment.
+// IsSandboxEnvironment returns true if the current environment is sandbox.
 func IsSandboxEnvironment() bool {
 	return ENVIRONMENT == ENVIRONMENT_SANDBOX
 }
 
-// IsDevelopmentEnvironment returns a boolean if is development environment.
+// IsDevelopmentEnvironment returns true if the current environment is development.
 func IsDevelopmentEnvironment() bool {
 	return ENVIRONMENT == ENVIRONMENT_DEVELOPMENT
 }
 
-// IsTestEnvironment returns a boolean if is test environment.
+// IsTestEnvironment returns true if the current environment is test.
 func IsTestEnvironment() bool {
 	return ENVIRONMENT == ENVIRONMENT_TEST
 }
 
-// IsCloudEnvironment returns a boolean if is production or sandbox environment.
+// IsCloudEnvironment returns true if the current cloud provider is configured.
 func IsCloudEnvironment() bool {
 	return IsProductionEnvironment() || IsSandboxEnvironment()
 }
 
-// IsLocalEnvironment returns a boolean if is development or test environment.
+// IsLocalEnvironment returns true if no cloud provider is configured.
 func IsLocalEnvironment() bool {
 	return IsDevelopmentEnvironment() || IsTestEnvironment()
 }

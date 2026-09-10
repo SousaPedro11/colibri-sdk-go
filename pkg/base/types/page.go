@@ -7,8 +7,8 @@ import (
 
 // Page is the page response contract
 type Page[T any] struct {
-	Content       []T    `json:"content"`
-	TotalElements uint64 `json:"totalElements"`
+	Items      []T    `json:"items"`
+	TotalItems uint64 `json:"totalItems"`
 }
 
 // PageRequest is the contract of request page

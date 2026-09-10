@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/logging"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/mount"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
 	"github.com/google/uuid"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/mount"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -26,10 +26,10 @@ type WiremockContainer struct {
 	instancePort      int
 }
 
-func UseWiremockContainer(configPath string) *WiremockContainer {
+func UseWiremockContainer(ctx context.Context, configPath string) *WiremockContainer {
 	if wiremockContainerInstance == nil {
 		wiremockContainerInstance = newWiremockContainer(configPath)
-		wiremockContainerInstance.start()
+		wiremockContainerInstance.start(ctx)
 	}
 	return wiremockContainerInstance
 }
@@ -48,27 +48,33 @@ func newWiremockContainer(configPath string) *WiremockContainer {
 				Target: "/home/wiremock",
 			})
 		},
-		Cmd:        []string{"--local-response-templating"},
-		WaitingFor: wait.ForListeningPort(wiremockSvcPort),
+		Cmd: []string{"--local-response-templating"},
+		WaitingFor: wait.ForAll(
+			wait.ForListeningPort(wiremockSvcPort),
+			wait.ForHTTP("/__admin/mappings").WithPort(wiremockSvcPort),
+		),
 	}
 
 	return &WiremockContainer{wContainerRequest: &req, configPath: configPath}
 }
 
-func (c *WiremockContainer) start() {
+func (c *WiremockContainer) start(ctx context.Context) {
 	var err error
-	ctx := context.Background()
 	c.wContainer, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: *c.wContainerRequest,
 		Started:          true,
 	})
 	if err != nil {
-		logging.Fatal(err.Error())
+		logging.Fatal(ctx).Err(err).Msg("could not start wiremock container")
 	}
 
-	runningPort, _ := c.wContainer.MappedPort(ctx, wiremockSvcPort)
-	c.instancePort = runningPort.Int()
-	logging.Info("Test wiremock started at port: %s", runningPort.Port())
+	runningPort, err := c.wContainer.MappedPort(ctx, wiremockSvcPort)
+	if err != nil {
+		logging.Fatal(ctx).Err(err).Msg("could not get wiremock container mapped port")
+	}
+	c.instancePort = int(runningPort.Num())
+
+	logging.Info(ctx).Msgf("Test wiremock started at port: %s", runningPort.Port())
 }
 
 func (c *WiremockContainer) Port() int {

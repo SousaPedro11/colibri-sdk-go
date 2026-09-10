@@ -1,13 +1,15 @@
 package colibri
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/cloud"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/config"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/monitoring"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/observer"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/validator"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/cloud"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/config"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/monitoring"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/observer"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/validator"
 )
 
 const banner = `
@@ -17,17 +19,21 @@ const banner = `
  '-..-| /   / __ / _ \| | | '_ \| '__| |
     /\/\   | (__| (_) | | | |_) | |  | |
     '--'    \___ \___/|_|_|_.__/|_|  |_|
-            project
+            project (%s)
 `
 
+// InitializeApp initializes all the components of the Colibri application.
+// It loads the configuration, prints the banner and application name, and initializes
+// the validator, observer, monitoring, and cloud services.
 func InitializeApp() {
 	if err := config.Load(); err != nil {
-		panic(fmt.Sprintf("Occurred a error on try load configs: %v", err))
+		logging.Fatal(context.Background()).Err(err).Msgf("an error on try load config")
 	}
 
 	printBanner()
 	printApplicationName()
 
+	logging.Initialize()
 	validator.Initialize()
 	observer.Initialize()
 	monitoring.Initialize()
@@ -36,7 +42,7 @@ func InitializeApp() {
 
 func printBanner() {
 	if config.IsDevelopmentEnvironment() {
-		fmt.Print(banner)
+		fmt.Printf(banner, config.VERSION)
 	}
 }
 

@@ -6,12 +6,13 @@ import (
 	"os"
 	"sync"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/cloud"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/cloud"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/config"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/monitoring"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/observer"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/validator"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/config"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/monitoring"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/observer"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/validator"
 	"github.com/google/uuid"
 )
 
@@ -20,32 +21,38 @@ type key string
 const (
 	localstackID  key = "localstack-id"
 	gcpEmulatorID key = "gcpEmulator-id"
+	rabbitmqID    key = "rabbitmq-id"
 
 	DEVELOPMENT_ENVIRONMENT_PATH  string = "../../../development-environment"
 	DATABASE_ENVIRONMENT_PATH     string = DEVELOPMENT_ENVIRONMENT_PATH + "/database/"
 	REST_ENVIRONMENT_PATH         string = DEVELOPMENT_ENVIRONMENT_PATH + "/rest/"
 	LOCALSTACK_ENVIRONMENT_PATH   string = DEVELOPMENT_ENVIRONMENT_PATH + "/localstack/"
 	GCP_EMULATOR_ENVIRONMENT_PATH string = DEVELOPMENT_ENVIRONMENT_PATH + "/gcp-emulator/"
+	RABBITMQ_ENVIRONMENT_PATH     string = DEVELOPMENT_ENVIRONMENT_PATH + "/rabbitmq/"
 	WIREMOCK_ENVIRONMENT_PATH     string = DEVELOPMENT_ENVIRONMENT_PATH + "/wiremock/"
 )
 
 var m sync.Mutex
 
 func InitializeBaseTest() {
+	logging.Initialize()
 	loadConfig()
 }
 
 func InitializeCacheDBTest() {
-	UseRedisContainer()
+	logging.Initialize()
+	UseRedisContainer(context.Background())
 	loadConfig()
 }
 
 func InitializeSqlDBTest() {
-	UsePostgresContainer()
+	logging.Initialize()
+	UsePostgresContainer(context.Background())
 	loadConfig()
 }
 
 func InitializeTestLocalstack(path ...string) {
+	logging.Initialize()
 	m.Lock()
 	ctx := context.WithValue(context.Background(), localstackID, uuid.New().String())
 	_ = UseLocalstackContainer(ctx, getLocalstackBasePath(path...))
@@ -62,10 +69,12 @@ func getLocalstackBasePath(path ...string) string {
 }
 
 func InitializeGcpEmulator(path ...string) {
+	logging.Initialize()
 	m.Lock()
 	ctx := context.WithValue(context.Background(), gcpEmulatorID, uuid.New().String())
 	_ = UseGcpEmulatorContainer(ctx, getGcpEmulatorBasePath(path...))
 	loadConfig()
+	_ = os.Setenv(config.ENV_CLOUD, config.CLOUD_GCP)
 	config.CLOUD = config.CLOUD_GCP
 	cloud.Initialize()
 	m.Unlock()
@@ -74,6 +83,27 @@ func InitializeGcpEmulator(path ...string) {
 func getGcpEmulatorBasePath(path ...string) string {
 	if len(path) == 0 {
 		return MountAbsolutPath(GCP_EMULATOR_ENVIRONMENT_PATH)
+	}
+	return path[0]
+}
+
+func InitializeRabbitmq(path ...string) {
+	logging.Initialize()
+	m.Lock()
+	ctx := context.WithValue(context.Background(), rabbitmqID, uuid.New().String())
+	_ = UseRabbitmqContainer(ctx, getRabbitmqBasePath(path...))
+	loadConfig()
+
+	_ = os.Setenv(config.ENV_COLIBRI_MESSAGING, config.MESSAGING_RABBITMQ)
+	config.COLIBRI_MESSAGING = config.MESSAGING_RABBITMQ
+	_ = os.Setenv(config.ENV_CLOUD, config.CLOUD_NONE)
+	cloud.Initialize()
+	m.Unlock()
+}
+
+func getRabbitmqBasePath(path ...string) string {
+	if len(path) == 0 {
+		return MountAbsolutPath(RABBITMQ_ENVIRONMENT_PATH)
 	}
 	return path[0]
 }

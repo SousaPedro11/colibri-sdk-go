@@ -6,21 +6,18 @@ import (
 	"errors"
 )
 
-var (
-	ErrorInvalidValue = errors.New("invalid []byte value")
-)
+// JsonB for json binary field
+type JsonB map[string]any
 
-type JsonB map[string]interface{}
-
-func (t *JsonB) Scan(value interface{}) error {
+func (j *JsonB) Scan(value any) error {
 	result, valid := value.([]byte)
 	if !valid {
-		return ErrorInvalidValue
+		return errors.New("type assertion to []byte failed")
 	}
 
-	return json.Unmarshal(result, &t)
+	return json.Unmarshal(result, &j)
 }
 
-func (t *JsonB) Value() (driver.Value, error) {
-	return json.Marshal(t)
+func (j JsonB) Value() (driver.Value, error) {
+	return json.Marshal(j)
 }

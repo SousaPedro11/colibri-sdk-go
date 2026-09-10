@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/logging"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/transaction"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/transaction"
 )
 
 // SqlTxContextKey is the type of the context key for the transaction.
@@ -16,9 +16,12 @@ const (
 	SqlTxContext SqlTxContextKey = "SqlTxContext"
 
 	transactionIsolationWarnMsg string = "transaction isolation just use first parameter, others will be ignored"
-	transactionRollbackErrorMsg string = "error when executing transaction rollback: %v: %w"
 	transactionCommitErrorMsg   string = "could not commit transaction: %w"
 	transactionStartErrorMsg    string = "could not start database transaction: %v"
+
+	transactionExecutionLogMsg string = "error executing transaction"
+	transactionCommitLogMsg    string = "could not commit transaction"
+	transactionStartLogMsg     string = "could not start database transaction"
 )
 
 // sqlTransaction implements a transaction.Transaction
@@ -35,7 +38,7 @@ func NewTransaction(isolation ...sql.IsolationLevel) transaction.Transaction {
 		isolationLevel = isolation[0]
 	} else if len(isolation) > 1 {
 		isolationLevel = isolation[0]
-		logging.Warn(transactionIsolationWarnMsg)
+		logging.Warn(context.Background()).Msg(transactionIsolationWarnMsg)
 	}
 
 	return &sqlTransaction{isolation: isolationLevel}
@@ -57,30 +60,24 @@ func (t *sqlTransaction) Execute(ctx context.Context, fn func(ctx context.Contex
 // fn: The function to be executed as part of the transaction.
 // Returns an error.
 func (t *sqlTransaction) ExecuteInInstance(ctx context.Context, instance *sql.DB, fn func(ctx context.Context) error) error {
-	transaction, transactionChannel, err := t.beginTransaction(ctx, instance)
+	tx, transactionChannel, err := t.beginTransaction(ctx, instance)
 	if err != nil {
 		return err
 	}
 	defer close(transactionChannel)
+	defer tx.Rollback()
 
-	ctx = context.WithValue(ctx, SqlTxContext, transaction)
+	ctx = context.WithValue(ctx, SqlTxContext, tx)
 
 	if err = fn(ctx); err != nil {
-		if rbErr := transaction.Rollback(); rbErr != nil {
-			fErr := fmt.Errorf(transactionRollbackErrorMsg, err, rbErr)
-			logging.Error("%v", fErr)
-			transactionChannel <- fErr
-			return fErr
-		}
-
-		logging.Error("%v", err)
+		logging.Error(ctx).Err(err).Msg(transactionExecutionLogMsg)
 		transactionChannel <- err
 		return err
 	}
 
-	if err = transaction.Commit(); err != nil {
+	if err = tx.Commit(); err != nil {
 		fErr := fmt.Errorf(transactionCommitErrorMsg, err)
-		logging.Error("%v", fErr)
+		logging.Error(ctx).Err(err).Msg(transactionCommitLogMsg)
 		transactionChannel <- fErr
 		return fErr
 	}
@@ -94,13 +91,13 @@ func (t *sqlTransaction) ExecuteInInstance(ctx context.Context, instance *sql.DB
 // instance: The specific database instance for the transaction.
 // Returns the transaction, a channel for errors, and an error.
 func (t *sqlTransaction) beginTransaction(ctx context.Context, instance *sql.DB) (*sql.Tx, chan error, error) {
-	transaction, err := instance.BeginTx(ctx, &sql.TxOptions{Isolation: t.isolation})
+	tx, err := instance.BeginTx(ctx, &sql.TxOptions{Isolation: t.isolation})
 
 	if err != nil {
 		fErr := fmt.Errorf(transactionStartErrorMsg, err)
-		logging.Error("%v", fErr)
+		logging.Error(ctx).Err(err).Msg(transactionStartLogMsg)
 		return nil, nil, fErr
 	}
 
-	return transaction, make(chan error, 1), nil
+	return tx, make(chan error, 1), nil
 }

@@ -15,7 +15,7 @@ func TestSqlTransactionWithoutInitialize(t *testing.T) {
 	t.Run("Should return error when instance is nil", func(t *testing.T) {
 		err := NewStatement(ctx, "", "Contact Name 1", "em@il.com").Execute()
 
-		assert.Error(t, err, db_not_initialized_error)
+		assert.Error(t, err, dbNotInitializedError)
 	})
 }
 
@@ -31,7 +31,7 @@ func TestSqlTransaction(t *testing.T) {
 	t.Run("Should return error when query is nil", func(t *testing.T) {
 		err := NewStatement(ctx, "", "Contact Name 1", "em@il.com").Execute()
 
-		assert.Error(t, err, query_is_empty_error)
+		assert.Error(t, err, queryIsEmptyError)
 	})
 
 	t.Run("Should execute transaction and commit", func(t *testing.T) {
@@ -88,6 +88,30 @@ func TestSqlTransaction(t *testing.T) {
 		assert.Error(t, err)
 		assert.NoError(t, query2Err)
 		assert.Nil(t, query2Result)
+	})
+
+	t.Run("Should rollback transaction on panic", func(t *testing.T) {
+		transaction := NewTransaction()
+		email := "panic@email.com"
+
+		func() {
+			defer func() {
+				_ = recover()
+			}()
+
+			_ = transaction.Execute(ctx, func(ctx context.Context) error {
+				insertContact := "INSERT INTO contacts (name, email) VALUES ($1, $2) "
+				stmt := NewStatement(ctx, insertContact, "Contact Panic", email)
+				if err := stmt.Execute(); err != nil {
+					return err
+				}
+				panic("simulated panic")
+			})
+		}()
+
+		queryResult, queryErr := NewQuery[contact](ctx, "SELECT name, email FROM contacts WHERE email = $1", email).One()
+		assert.NoError(t, queryErr)
+		assert.Nil(t, queryResult)
 	})
 }
 

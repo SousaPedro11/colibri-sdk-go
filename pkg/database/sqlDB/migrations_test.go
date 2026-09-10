@@ -6,12 +6,14 @@ import (
 	"os"
 	"testing"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/config"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/test"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/config"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/test"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestMigrations(t *testing.T) {
+	logging.Initialize()
 	InitializeSqlDBTest()
 	os.Setenv(config.ENV_SQL_DB_MIGRATION, "true")
 	os.Setenv("MIGRATION_SOURCE_URL", fmt.Sprintf("%smigrations", test.DATABASE_ENVIRONMENT_PATH))

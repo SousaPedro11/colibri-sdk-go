@@ -3,11 +3,14 @@ package cloud
 import (
 	"testing"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/config"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/config"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestInitialize(t *testing.T) {
+	logging.Initialize()
+
 	t.Run("Should nil if not initialize", func(t *testing.T) {
 		assert.Nil(t, instance)
 	})
@@ -19,8 +22,10 @@ func TestInitialize(t *testing.T) {
 		Initialize()
 
 		assert.NotNil(t, instance)
-		assert.NotNil(t, instance.aws)
-		assert.NotNil(t, GetAwsSession())
+		assert.NotNil(t, instance.awsConfig)
+		assert.NotNil(t, instance.awsARN)
+		assert.Nil(t, instance.firebase)
+		assert.Equal(t, *instance.awsConfig, GetAwsConfig())
 	})
 
 	t.Run("Should initialize AWS with cloud enviroment", func(t *testing.T) {
@@ -30,7 +35,59 @@ func TestInitialize(t *testing.T) {
 		Initialize()
 
 		assert.NotNil(t, instance)
-		assert.NotNil(t, instance.aws)
-		assert.NotNil(t, GetAwsSession())
+		assert.NotNil(t, instance.awsConfig)
+		assert.NotNil(t, instance.awsARN)
+		assert.Nil(t, instance.firebase)
+		assert.Equal(t, *instance.awsConfig, GetAwsConfig())
+	})
+
+	t.Run("Should initialize FIREBASE with local enviroment", func(t *testing.T) {
+		config.ENVIRONMENT = config.ENVIRONMENT_DEVELOPMENT
+		config.CLOUD = config.CLOUD_FIREBASE
+
+		Initialize()
+
+		assert.NotNil(t, instance)
+		assert.Nil(t, instance.awsConfig)
+		assert.Nil(t, instance.awsARN)
+		assert.NotNil(t, instance.firebase)
+		assert.NotNil(t, GetFirebaseSession())
+	})
+
+	t.Run("Should initialize FIREBASE with cloud enviroment", func(t *testing.T) {
+		config.ENVIRONMENT = config.ENVIRONMENT_PRODUCTION
+		config.CLOUD = config.CLOUD_FIREBASE
+
+		Initialize()
+
+		assert.NotNil(t, instance)
+		assert.Nil(t, instance.awsConfig)
+		assert.Nil(t, instance.awsARN)
+		assert.NotNil(t, instance.firebase)
+		assert.NotNil(t, GetFirebaseSession())
+	})
+
+	t.Run("Should initialize GCP with local enviroment", func(t *testing.T) {
+		config.ENVIRONMENT = config.ENVIRONMENT_DEVELOPMENT
+		config.CLOUD = config.CLOUD_GCP
+
+		Initialize()
+
+		assert.NotNil(t, instance)
+		assert.Nil(t, instance.awsConfig)
+		assert.Nil(t, instance.awsARN)
+		assert.Nil(t, instance.firebase)
+	})
+
+	t.Run("Should initialize GCP with cloud enviroment", func(t *testing.T) {
+		config.ENVIRONMENT = config.ENVIRONMENT_PRODUCTION
+		config.CLOUD = config.CLOUD_GCP
+
+		Initialize()
+
+		assert.NotNil(t, instance)
+		assert.Nil(t, instance.awsConfig)
+		assert.Nil(t, instance.awsARN)
+		assert.Nil(t, instance.firebase)
 	})
 }

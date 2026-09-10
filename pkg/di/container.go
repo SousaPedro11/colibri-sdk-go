@@ -14,34 +14,34 @@ func NewContainer() Container {
 	return Container{}
 }
 
-func (c *Container) AddDependencies(deps []interface{}) {
-	// Gera o array com as dependencias
+func (c *Container) AddDependencies(deps []any) {
+	// Generates the array with dependencies
 	ReflectTypeArray := generateDependenciesArray(deps, false)
 	c.checkingNameUnit(ReflectTypeArray)
 	c.dependencies = ReflectTypeArray
 }
 
-func (c *Container) AddGlobalDependencies(deps []interface{}) {
-	// Gera o array com as dependencias
+func (c *Container) AddGlobalDependencies(deps []any) {
+	// Generates the array with dependencies
 	ReflectTypeArray := generateDependenciesArray(deps, true)
 	c.checkingNameUnit(ReflectTypeArray)
 	c.dependencies = ReflectTypeArray
 }
 
-func (f *Container) StartApp(startFunc interface{}) {
+func (c *Container) StartApp(startFunc any) {
 
 	fmt.Println("Starting framework.....")
-	quantDep := len(f.dependencies)
+	quantDep := len(c.dependencies)
 	fmt.Println(quantDep, " registered dependencies")
 
 	dep := generateDependencyBean(startFunc, false)
 
-	args := f.getDependencyConstructorArgs(dep)
+	args := c.getDependencyConstructorArgs(dep)
 
 	fmt.Println("............Starting application................")
 	fmt.Println()
 
-	// Chamando o construtor e enviando os parametros encontrados
+	// Calling the constructor and sending the found parameters
 	dep.fnValue.Call(args)
 
 }
@@ -50,16 +50,16 @@ func (c *Container) getDependencyConstructorArgs(dependency DependencyBean) []re
 	args := []reflect.Value{}
 	fmt.Printf("constructor: %s, number of parameters: %d\n", dependency.Name, len(dependency.ParamTypes))
 	for position, paramType := range dependency.ParamTypes {
-		
+
 		// Check if trhe variadic param
 		if dependency.IsVariadic {
 			if position == (len(dependency.ParamTypes) - 1) {
-				// Redice slice elements to single element
+				// Reduce slice elements to single element
 				paramType = ReduceSliceToSingleElement(paramType)
 			}
 		}
 
-		// Procura na lista de um contrutuores um tipo igual ao do parametro
+		// Searches the list of constructors for a type equal to the parameter
 		injectableDependencies := c.searchInjectableDependencies(paramType, dependency.constructorReturn, dependency.IsVariadic)
 
 		for _, injectableDependency := range injectableDependencies {
@@ -95,22 +95,22 @@ func (c *Container) searchInjectableDependencies(paramType reflect.Type, returnT
 		if isVariadic {
 			depsFound = dependenciesFound
 		} else {
-			// O elemento 0 é o único já que os contrutores só tem um retorno
+			// Element 0 is the only one since constructors have only one return
 			disambiguation := searchDisambiguation(returnType, dependenciesFound)
 			depsFound = append(depsFound, disambiguation)
 			return depsFound
 		}
 	} else if len(dependenciesFound) == 0 {
-		panic("nemhum construtor para o parametro foi encontrado")
+		panic("no constructor found for the parameter")
 	} else {
 		depsFound = append(depsFound, dependenciesFound[0])
 	}
 	return depsFound
 }
 
-func (f *Container) searchTypes(paramType reflect.Type) []DependencyBean {
+func (c *Container) searchTypes(paramType reflect.Type) []DependencyBean {
 	dependenciesFound := []DependencyBean{}
-	for fnName, dependency := range f.dependencies {
+	for fnName, dependency := range c.dependencies {
 		for i := 0; i < dependency.constructorType.NumOut(); i++ {
 			returnType := dependency.constructorType.Out(i)
 			if returnType == paramType {
@@ -122,9 +122,9 @@ func (f *Container) searchTypes(paramType reflect.Type) []DependencyBean {
 	return dependenciesFound
 }
 
-func (f *Container) searchImplementations(paramType reflect.Type) []DependencyBean {
+func (c *Container) searchImplementations(paramType reflect.Type) []DependencyBean {
 	dependenciesFound := []DependencyBean{}
-	for fnName, dependency := range f.dependencies {
+	for fnName, dependency := range c.dependencies {
 		for i := 0; i < dependency.constructorType.NumOut(); i++ {
 			returnType := dependency.constructorType.Out(i)
 			implements := implementsInterface(returnType, paramType)

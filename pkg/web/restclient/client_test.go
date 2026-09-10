@@ -10,12 +10,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
 	"k8s.io/apimachinery/pkg/util/net"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/monitoring"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/test"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/database/cacheDB"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/monitoring"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/test"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/database/cacheDB"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type userResponseTestStruct struct {
@@ -47,9 +49,10 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	logging.Initialize()
 	monitoring.Initialize()
 	test.InitializeCacheDBTest()
-	wiremock = test.UseWiremockContainer(test.MountAbsolutPath(test.WIREMOCK_ENVIRONMENT_PATH))
+	wiremock = test.UseWiremockContainer(context.Background(), test.MountAbsolutPath(test.WIREMOCK_ENVIRONMENT_PATH))
 	restClient = NewRestClient(&RestClientConfig{
 		Name:    "test-rest-client",
 		BaseURL: fmt.Sprintf("http://localhost:%d/users-api/v1", wiremock.Port()),
@@ -95,6 +98,7 @@ func TestGet(t *testing.T) {
 
 		assert.NotNil(t, response)
 		assert.EqualValues(t, http.StatusOK, response.StatusCode())
+		require.NotNil(t, response.SuccessBody())
 		assert.Equal(t, 5, len(*response.SuccessBody()))
 		assert.EqualValues(t, expected, *response.SuccessBody())
 		assert.Nil(t, response.ErrorBody())
@@ -135,7 +139,7 @@ func TestPost(t *testing.T) {
 
 		assert.NotNil(t, response)
 		assert.EqualValues(t, http.StatusCreated, response.StatusCode())
-		assert.NotNil(t, response.SuccessBody())
+		require.NotNil(t, response.SuccessBody())
 		assert.Equal(t, uint(10), response.SuccessBody().ID)
 		assert.Equal(t, newUser.Name, response.SuccessBody().Name)
 		assert.Equal(t, newUser.Email, response.SuccessBody().Email)
@@ -173,7 +177,7 @@ func TestPostWithMultipart(t *testing.T) {
 			Client:     restClient,
 			HttpMethod: http.MethodPost,
 			Path:       "/upload",
-			MultipartFields: map[string]interface{}{
+			MultipartFields: map[string]any{
 				"myfile": MultipartFile{
 					FileName:    "test.txt",
 					File:        UploadFile,
@@ -198,7 +202,7 @@ func TestPostWithMultipart(t *testing.T) {
 			Client:     restClient,
 			HttpMethod: http.MethodPost,
 			Path:       "/upload",
-			MultipartFields: map[string]interface{}{
+			MultipartFields: map[string]any{
 				"file": MultipartFile{
 					FileName: "test.txt",
 					File:     UploadFile,
@@ -221,7 +225,7 @@ func TestPostWithMultipart(t *testing.T) {
 			Ctx:        ctx,
 			Client:     restClient,
 			HttpMethod: http.MethodPost,
-			MultipartFields: map[string]interface{}{
+			MultipartFields: map[string]any{
 				"name":  "User 100",
 				"email": "user_100@email.com",
 			},
@@ -229,7 +233,7 @@ func TestPostWithMultipart(t *testing.T) {
 
 		assert.NotNil(t, response)
 		assert.EqualValues(t, http.StatusCreated, response.StatusCode())
-		assert.NotNil(t, response.SuccessBody())
+		require.NotNil(t, response.SuccessBody())
 		assert.Equal(t, uint(10), response.SuccessBody().ID)
 		assert.Equal(t, newUser.Name, response.SuccessBody().Name)
 		assert.Equal(t, newUser.Email, response.SuccessBody().Email)
@@ -245,7 +249,7 @@ func TestPostWithMultipart(t *testing.T) {
 			Client:     restClient,
 			HttpMethod: http.MethodPost,
 			Path:       "/upload",
-			MultipartFields: map[string]interface{}{
+			MultipartFields: map[string]any{
 				"file": -1,
 			},
 		}.Call()
@@ -275,7 +279,7 @@ func TestPut(t *testing.T) {
 		assert.NotNil(t, response)
 		assert.EqualValues(t, http.StatusOK, response.StatusCode())
 		assert.NoError(t, response.Error())
-		assert.NotNil(t, response.SuccessBody())
+		require.NotNil(t, response.SuccessBody())
 		assert.Equal(t, newUser.ID, response.SuccessBody().ID)
 		assert.Equal(t, newUser.Name, response.SuccessBody().Name)
 		assert.Equal(t, newUser.Email, response.SuccessBody().Email)
@@ -316,7 +320,7 @@ func TestPatch(t *testing.T) {
 
 		assert.NotNil(t, response)
 		assert.EqualValues(t, http.StatusOK, response.StatusCode())
-		assert.NotNil(t, response.SuccessBody())
+		require.NotNil(t, response.SuccessBody())
 		assert.Equal(t, uint(10), response.SuccessBody().ID)
 		assert.Equal(t, newUser.Name, response.SuccessBody().Name)
 		assert.NotNil(t, response.SuccessBody().Email)
@@ -357,7 +361,7 @@ func TestDelete(t *testing.T) {
 
 		assert.NotNil(t, response)
 		assert.EqualValues(t, http.StatusOK, response.StatusCode())
-		assert.NotNil(t, response.SuccessBody())
+		require.NotNil(t, response.SuccessBody())
 		assert.Equal(t, uint(11), response.SuccessBody().ID)
 		assert.Equal(t, "User 11 deleted", response.SuccessBody().Name)
 		assert.Nil(t, response.ErrorBody())
@@ -417,6 +421,7 @@ func TestPostNotEmptyResponseBodyError(t *testing.T) {
 		assert.NotNil(t, response)
 		assert.EqualValues(t, http.StatusInternalServerError, response.StatusCode())
 		assert.Nil(t, response.SuccessBody())
+		require.NotNil(t, response.ErrorBody())
 		assert.EqualValues(t, "Error message post user", response.ErrorBody().Message)
 		assert.EqualError(t, response.Error(), "error body decoded with 500 status code")
 	})
@@ -458,7 +463,7 @@ func TestPostWithBodyString(t *testing.T) {
 
 		assert.NotNil(t, response)
 		assert.EqualValues(t, http.StatusOK, response.StatusCode())
-		assert.NotNil(t, response.SuccessBody())
+		require.NotNil(t, response.SuccessBody())
 		assert.Equal(t, uint(100), response.SuccessBody().ID)
 		assert.Equal(t, "user_100@email.com", response.SuccessBody().Email)
 		assert.Equal(t, "User 100", response.SuccessBody().Name)
@@ -490,6 +495,23 @@ func TestPostWithRetry(t *testing.T) {
 		assert.NotNil(t, response)
 		assert.EqualValues(t, http.StatusInternalServerError, response.StatusCode())
 		assert.Nil(t, response.SuccessBody())
+	})
+}
+
+func TestClientWithProxy(t *testing.T) {
+	t.Run("Should create a client with proxy configuration", func(t *testing.T) {
+		proxyClient := NewRestClient(&RestClientConfig{
+			Name:     "test-proxy-client",
+			BaseURL:  "http://example.com",
+			Timeout:  1,
+			ProxyURL: "http://proxy.example.com:8080",
+		})
+
+		assert.NotNil(t, proxyClient)
+		assert.Equal(t, "test-proxy-client", proxyClient.name)
+		assert.Equal(t, "http://example.com", proxyClient.baseURL)
+		assert.NotNil(t, proxyClient.client)
+		assert.NotNil(t, proxyClient.client.Transport)
 	})
 }
 

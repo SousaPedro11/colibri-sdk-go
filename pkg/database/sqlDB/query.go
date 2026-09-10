@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/database/cacheDB"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/database/cacheDB"
 )
 
-// Query is a struct for sql query
+// Query is a struct for an SQL query
 type Query[T any] struct {
 	ctx   context.Context
 	cache *cacheDB.Cache[T]
@@ -20,7 +20,7 @@ type Query[T any] struct {
 //
 // ctx: the context.Context for the query
 // query: the query string to execute
-// params: variadic interface{} for additional parameters
+// params: variadic any for additional parameters
 // Returns a pointer to Query struct
 func NewQuery[T any](ctx context.Context, query string, params ...any) *Query[T] {
 	return &Query[T]{ctx, nil, query, params}
@@ -31,7 +31,7 @@ func NewQuery[T any](ctx context.Context, query string, params ...any) *Query[T]
 // ctx: the context.Context for the query
 // cache: the cacheDB.Cache to store the query result
 // query: the query string to execute
-// params: variadic interface{} for additional parameters
+// params: variadic any for additional parameters
 // Returns a pointer to Query struct
 func NewCachedQuery[T any](ctx context.Context, cache *cacheDB.Cache[T], query string, params ...any) (q *Query[T]) {
 	return &Query[T]{ctx, cache, query, params}
@@ -47,7 +47,7 @@ func (q *Query[T]) Many() ([]T, error) {
 // ManyInInstance retrieves multiple items of type T for the given SQL instance.
 //
 // instance: The *sql.DB instance to execute the query.
-// Returns a slice of retrieved items of type T and an error.
+// Returns a slice of retrieved items type T and an error.
 func (q *Query[T]) ManyInInstance(instance *sql.DB) ([]T, error) {
 	if err := q.validate(instance); err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func (q *Query[T]) ManyInInstance(instance *sql.DB) ([]T, error) {
 // fetchMany retrieves multiple items of type T for the given SQL instance.
 //
 // instance: The *sql.DB instance to execute the query.
-// Returns a slice of retrieved items of type T and an error.
+// Returns a slice of retrieved items type T and an error.
 func (q *Query[T]) fetchMany(instance *sql.DB) ([]T, error) {
 	rows, err := q.queryContext(instance)
 	if err != nil {
@@ -140,11 +140,11 @@ func (q *Query[T]) fetchOne(instance *sql.DB) (*T, error) {
 // Returns an error.
 func (q *Query[T]) validate(instance *sql.DB) error {
 	if instance == nil {
-		return errors.New(db_not_initialized_error)
+		return errors.New(dbNotInitializedError)
 	}
 
 	if q.query == "" {
-		return errors.New(query_is_empty_error)
+		return errors.New(queryIsEmptyError)
 	}
 
 	return nil

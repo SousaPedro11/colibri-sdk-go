@@ -1,17 +1,20 @@
 package restclient
 
 import (
+	"context"
 	"net/http"
+	"net/url"
 	"time"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/logging"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/monitoring"
 	"github.com/mercari/go-circuitbreaker"
-	"github.com/newrelic/go-agent/v3/newrelic"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 const (
 	timeoutDefault           uint   = 1
-	restClientTransaction    string = "REST-CLIENT"
+	circuitBreakerMsg        string = "[%s] state changed: old [%s] -> new [%s]"
 	errServiceNotAvailable   string = "service not available"
 	errResponseWithEmptyBody string = "response returned with empty body and %d status code"
 )
@@ -44,8 +47,12 @@ func NewRestClient(config *RestClientConfig) *RestClient {
 	if config.Timeout == 0 {
 		config.Timeout = timeoutDefault
 	}
-	client := &http.Client{Timeout: time.Duration(config.Timeout) * time.Second}
-	client.Transport = newrelic.NewRoundTripper(client.Transport)
+
+	client := &http.Client{
+		Timeout:   time.Duration(config.Timeout) * time.Second,
+		Transport: getTransport(config),
+	}
+
 	return &RestClient{
 		name:    config.Name,
 		baseURL: config.BaseURL,
@@ -54,8 +61,33 @@ func NewRestClient(config *RestClientConfig) *RestClient {
 			circuitbreaker.WithOpenTimeout(time.Second*10),
 			circuitbreaker.WithTripFunc(circuitbreaker.NewTripFuncConsecutiveFailures(5)),
 			circuitbreaker.WithOnStateChangeHookFn(func(oldState, newState circuitbreaker.State) {
-				logging.Info("[%s] state changed: old [%s] -> new [%s]", config.Name, string(oldState), string(newState))
+				logging.
+					Info(context.Background()).
+					Msgf(circuitBreakerMsg, config.Name, string(oldState), string(newState))
 			}),
 		),
 	}
+}
+
+// getTransport returns a new http.RoundTripper based on the provided configuration.
+//
+// config: A pointer to RestClientConfig containing the configuration details for the REST client.
+// Returns a pointer to http.RoundTripper.
+func getTransport(config *RestClientConfig) http.RoundTripper {
+	transport := &http.Transport{
+		MaxIdleConns: 0,
+	}
+
+	if config.ProxyURL != "" {
+		proxyURL, err := url.Parse(config.ProxyURL)
+		if err == nil {
+			transport.Proxy = http.ProxyURL(proxyURL)
+		}
+	}
+
+	if monitoring.UseOTELMonitoring() {
+		return otelhttp.NewTransport(transport)
+	}
+
+	return transport
 }

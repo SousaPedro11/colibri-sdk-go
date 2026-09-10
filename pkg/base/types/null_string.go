@@ -10,7 +10,8 @@ import (
 // NullString for empty string field
 type NullString sql.NullString
 
-func (t *NullString) Scan(value interface{}) error {
+// Scan converts sql driver value to null string
+func (t *NullString) Scan(value any) error {
 	var i sql.NullString
 	if err := i.Scan(value); err != nil {
 		return err
@@ -25,6 +26,7 @@ func (t *NullString) Scan(value interface{}) error {
 	return nil
 }
 
+// Value converts null string to sql driver value
 func (ns NullString) Value() (driver.Value, error) {
 	if !ns.Valid {
 		return nil, nil
@@ -33,6 +35,7 @@ func (ns NullString) Value() (driver.Value, error) {
 	return ns.String, nil
 }
 
+// MarshalJSON converts null string to json string format
 func (t NullString) MarshalJSON() ([]byte, error) {
 	if !t.Valid {
 		return json.Marshal(nil)
@@ -41,6 +44,7 @@ func (t NullString) MarshalJSON() ([]byte, error) {
 	return json.Marshal(t.String)
 }
 
+// UnmarshalJSON converts json string to null string
 func (t *NullString) UnmarshalJSON(data []byte) error {
 	var ptr *string
 	if err := json.Unmarshal(data, &ptr); err != nil {

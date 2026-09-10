@@ -4,16 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/config"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/logging"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/config"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
 	"github.com/google/uuid"
 
-	"github.com/docker/go-connections/nat"
-	_ "github.com/newrelic/go-agent/v3/integrations/nrpq"
+	_ "github.com/lib/pq"
+	"github.com/moby/moby/api/types/network"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -36,10 +35,10 @@ type PostgresContainer struct {
 }
 
 // UsePostgresContainer initialize postgres container for integration tests.
-func UsePostgresContainer() *PostgresContainer {
+func UsePostgresContainer(ctx context.Context) *PostgresContainer {
 	if postgresContainerInstance == nil {
 		postgresContainerInstance = newPostgresContainer()
-		postgresContainerInstance.start()
+		postgresContainerInstance.start(ctx)
 	}
 	return postgresContainerInstance
 }
@@ -56,7 +55,7 @@ func newPostgresContainer() *PostgresContainer {
 		},
 		WaitingFor: wait.ForAll(
 			wait.ForListeningPort(testPostgresSvcPort),
-			wait.ForSQL(testPostgresSvcPort, "postgres", func(host string, port nat.Port) string {
+			wait.ForSQL(testPostgresSvcPort, "postgres", func(host string, port network.Port) string {
 				return fmt.Sprintf(
 					"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 					host,
@@ -72,24 +71,22 @@ func newPostgresContainer() *PostgresContainer {
 	return &PostgresContainer{pgContainerRequest: req}
 }
 
-func (c *PostgresContainer) start() {
+func (c *PostgresContainer) start(ctx context.Context) {
 	var err error
-	ctx := context.Background()
 	c.pgContainer, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: *c.pgContainerRequest,
 		Started:          true,
 	})
 	if err != nil {
-		logging.Fatal(err.Error())
+		logging.Fatal(ctx).Err(err).Msg("could not start the test postgres container")
 	}
 
 	testDbPort, err := c.pgContainer.MappedPort(ctx, testPostgresSvcPort)
 	if err != nil {
-		logging.Fatal(err.Error())
+		logging.Fatal(ctx).Err(err).Msg("could not get the mapped port of the test postgres container")
 	}
 
-	log.Printf("Test postgres started at port: %s", testDbPort)
-	c.setDatabaseEnv(testDbPort)
+	c.setDatabaseEnv(ctx, testDbPort)
 	databaseURL := fmt.Sprintf(config.SQL_DB_CONNECTION_URI_DEFAULT,
 		os.Getenv(config.ENV_SQL_DB_HOST),
 		testDbPort.Port(),
@@ -99,8 +96,10 @@ func (c *PostgresContainer) start() {
 		"test-app",
 		os.Getenv(config.ENV_SQL_DB_SSL_MODE))
 	if c.pgDB, err = sql.Open("postgres", databaseURL); err != nil {
-		logging.Fatal(err.Error())
+		logging.Fatal(ctx).Err(err).Msg("could not open the connection to the test postgres database")
 	}
+
+	logging.Info(ctx).Msgf("Test postgres started at port: %s", testDbPort)
 }
 
 func (c *PostgresContainer) Dataset(basePath string, scripts ...string) error {
@@ -118,7 +117,7 @@ func (c *PostgresContainer) Dataset(basePath string, scripts ...string) error {
 	return nil
 }
 
-func (c *PostgresContainer) loadScript(basePath string, fileName string) (string, error) {
+func (c *PostgresContainer) loadScript(basePath, fileName string) (string, error) {
 	if !strings.HasSuffix(basePath, "/") {
 		basePath += "/"
 	}
@@ -140,18 +139,18 @@ func (c *PostgresContainer) execScript(script string) error {
 	return nil
 }
 
-func (c *PostgresContainer) setDatabaseEnv(testDbPort nat.Port) {
-	c.setEnv(config.ENV_SQL_DB_HOST, testDbHost)
-	c.setEnv(config.ENV_SQL_DB_PORT, testDbPort.Port())
-	c.setEnv(config.ENV_SQL_DB_NAME, testDbName)
-	c.setEnv(config.ENV_SQL_DB_USER, testDbUser)
-	c.setEnv(config.ENV_SQL_DB_PASSWORD, testDbPassword)
-	c.setEnv(config.ENV_SQL_DB_SSL_MODE, "disable")
-	c.setEnv(config.ENV_SQL_DB_MIGRATION, "true")
+func (c *PostgresContainer) setDatabaseEnv(ctx context.Context, testDbPort network.Port) {
+	c.setEnv(ctx, config.ENV_SQL_DB_HOST, testDbHost)
+	c.setEnv(ctx, config.ENV_SQL_DB_PORT, testDbPort.Port())
+	c.setEnv(ctx, config.ENV_SQL_DB_NAME, testDbName)
+	c.setEnv(ctx, config.ENV_SQL_DB_USER, testDbUser)
+	c.setEnv(ctx, config.ENV_SQL_DB_PASSWORD, testDbPassword)
+	c.setEnv(ctx, config.ENV_SQL_DB_SSL_MODE, "disable")
+	c.setEnv(ctx, config.ENV_SQL_DB_MIGRATION, "true")
 }
 
-func (c *PostgresContainer) setEnv(env string, value string) {
+func (c *PostgresContainer) setEnv(ctx context.Context, env, value string) {
 	if err := os.Setenv(env, value); err != nil {
-		logging.Fatal("could not set env[%s] value[%s]: %v", env, value, err)
+		logging.Fatal(ctx).Msgf("could not set env[%s] value[%s]: %v", env, value, err)
 	}
 }

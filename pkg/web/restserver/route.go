@@ -2,9 +2,6 @@ package restserver
 
 import (
 	"net/http"
-
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/config"
-	"golang.org/x/exp/slices"
 )
 
 // RoutePrefix is the type from default's routes
@@ -17,12 +14,17 @@ const (
 	NoPrefix         RoutePrefix = "/"
 )
 
-// Route is the structure from inject the routes in the http router
+// Route represents an HTTP route with attributes for URI, method, prefix, handler function, and pre-execution middleware logic.
 type Route struct {
-	URI         string
-	Method      string
-	Prefix      RoutePrefix
-	Function    func(ctx WebContext)
+	// URI specifies the path or endpoint for the route in the HTTP router.
+	URI string
+	// Method defines the HTTP method (e.g., GET, POST) associated with the route.
+	Method string
+	// Prefix specifies a common prefix for the routes.
+	Prefix RoutePrefix
+	// Function defines the handler function to be executed when the route is accessed.
+	Function func(ctx WebContext)
+	// BeforeEnter is a middleware function executed before entering the route handler; returns MiddlewareError for failures.
 	BeforeEnter func(ctx WebContext) *MiddlewareError
 }
 
@@ -42,14 +44,12 @@ func addHealthCheckRoute() {
 }
 
 func addDocumentationRoute() {
-	if slices.Contains([]string{config.ENVIRONMENT_SANDBOX, config.ENVIRONMENT_DEVELOPMENT}, config.ENVIRONMENT) {
-		const route = "/api-docs"
-		srvRoutes = append(srvRoutes, Route{
-			URI:    route,
-			Method: http.MethodGet,
-			Function: func(ctx WebContext) {
-				ctx.ServeFile("./docs/swagger.json")
-			},
-		})
-	}
+	const route = "/api-docs"
+	srvRoutes = append(srvRoutes, Route{
+		URI:    route,
+		Method: http.MethodGet,
+		Function: func(ctx WebContext) {
+			ctx.ServeFile("./docs/swagger.json")
+		},
+	})
 }

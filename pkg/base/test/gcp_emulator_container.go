@@ -3,14 +3,13 @@ package test
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/logging"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/mount"
-	"github.com/docker/go-connections/nat"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
 	"github.com/google/uuid"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/mount"
+	"github.com/moby/moby/api/types/network"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -28,13 +27,12 @@ var (
 type gcpEmulatorContainer struct {
 	lsContainerRequest *testcontainers.ContainerRequest
 	lsContainer        testcontainers.Container
-	ctx                context.Context
 }
 
 func UseGcpEmulatorContainer(ctx context.Context, configPath string) *gcpEmulatorContainer {
 	if gcpEmulatorContainerInstance == nil {
 		gcpEmulatorContainerInstance = newGcpEmulatorContainer(ctx, configPath)
-		gcpEmulatorContainerInstance.start()
+		gcpEmulatorContainerInstance.start(ctx)
 	}
 	return gcpEmulatorContainerInstance
 }
@@ -63,34 +61,34 @@ func newGcpEmulatorContainer(ctx context.Context, configPath string) *gcpEmulato
 		),
 	}
 
-	return &gcpEmulatorContainer{lsContainerRequest: req, ctx: ctx}
+	return &gcpEmulatorContainer{lsContainerRequest: req}
 }
 
-func (c *gcpEmulatorContainer) start() {
+func (c *gcpEmulatorContainer) start(ctx context.Context) {
 	var err error
-	c.lsContainer, err = testcontainers.GenericContainer(c.ctx, testcontainers.GenericContainerRequest{
+	c.lsContainer, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: *c.lsContainerRequest,
 		Started:          true,
 	})
 	if err != nil {
-		logging.Fatal(err.Error())
+		logging.Fatal(ctx).Err(err).Msg("could not start the test gcp emulator container")
 	}
 
-	pubSubPort, err := c.lsContainer.MappedPort(c.ctx, gcpEmulatorPubSubSvcPort)
+	pubSubPort, err := c.lsContainer.MappedPort(ctx, gcpEmulatorPubSubSvcPort)
 	if err != nil {
-		logging.Fatal(err.Error())
+		logging.Fatal(ctx).Err(err).Msg("could not get the mapped Pub/Sub port of the test gcp emulator container")
 	}
 
-	storagePort, err := c.lsContainer.MappedPort(c.ctx, gcpEmulatorStorageSvcPort)
+	storagePort, err := c.lsContainer.MappedPort(ctx, gcpEmulatorStorageSvcPort)
 	if err != nil {
-		logging.Fatal(err.Error())
+		logging.Fatal(ctx).Err(err).Msg("could not get the mapped Storage port of the test gcp emulator container")
 	}
 
-	log.Printf("Test gcp emulator started. Pub/Sub at %s and Storage at %s", pubSubPort, storagePort)
+	logging.Info(ctx).Msgf("Test gcp emulator started. Pub/Sub at %s and Storage at %s", pubSubPort, storagePort)
 	c.setEnv(pubSubPort, storagePort)
 }
 
-func (c *gcpEmulatorContainer) setEnv(pubSubPort, storagePort nat.Port) {
+func (c *gcpEmulatorContainer) setEnv(pubSubPort, storagePort network.Port) {
 	os.Setenv("PUBSUB_PROJECT_ID", "test-project")
 	os.Setenv("PUBSUB_EMULATOR_HOST", fmt.Sprintf("localhost:%s", pubSubPort.Port()))
 	os.Setenv("STORAGE_EMULATOR_HOST", fmt.Sprintf("localhost:%s", storagePort.Port()))

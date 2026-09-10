@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/types"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/types"
 )
 
 const (
@@ -19,7 +19,7 @@ type PageQuery[T any] struct {
 	ctx   context.Context
 	page  *types.PageRequest
 	query string
-	args  []interface{}
+	args  []any
 }
 
 // NewPageQuery creates a new pointer to PageQuery struct.
@@ -27,13 +27,13 @@ type PageQuery[T any] struct {
 // ctx: the context.Context for the query
 // page: the types.PageRequest for the query
 // query: the query string to execute
-// params: variadic interface{} for additional parameters
+// params: variadic any for additional parameters
 // Returns a pointer to PageQuery struct
-func NewPageQuery[T any](ctx context.Context, page *types.PageRequest, query string, params ...interface{}) *PageQuery[T] {
+func NewPageQuery[T any](ctx context.Context, page *types.PageRequest, query string, params ...any) *PageQuery[T] {
 	return &PageQuery[T]{ctx, page, query, params}
 }
 
-// Execute returns a pointer of page type with slice of T data.
+// Execute returns a pointer of a page type with slice of T data.
 //
 // No parameters.
 // Returns a pointer to PageQuery struct and an error.
@@ -53,12 +53,12 @@ func (q *PageQuery[T]) ExecuteInInstance(instance *sql.DB) (*types.Page[T], erro
 
 	var result types.Page[T]
 	var err error
-	result.TotalElements, err = q.pageTotal(instance)
+	result.TotalItems, err = q.pageTotal(instance)
 	if err != nil {
 		return nil, err
 	}
 
-	result.Content, err = q.pageData(instance)
+	result.Items, err = q.pageData(instance)
 	return &result, err
 }
 
@@ -98,15 +98,15 @@ func (q *PageQuery[T]) pageData(instance *sql.DB) ([]T, error) {
 // Returns an error.
 func (q *PageQuery[T]) validate(instance *sql.DB) error {
 	if instance == nil {
-		return errors.New(db_not_initialized_error)
+		return errors.New(dbNotInitializedError)
 	}
 
 	if q.page == nil {
-		return errors.New(page_is_empty_error)
+		return errors.New(pageIsEmptyError)
 	}
 
 	if q.query == "" {
-		return errors.New(query_is_empty_error)
+		return errors.New(queryIsEmptyError)
 	}
 
 	return nil

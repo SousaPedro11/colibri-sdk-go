@@ -12,27 +12,27 @@ func isInterface(r reflect.Type) bool {
 }
 
 func searchDisambiguation(returnType reflect.Type, dependenciesFound []DependencyBean) DependencyBean {
-	// Iterar sobre os campos da struct e ler os metadados
+	// Iterate over struct fields and read metadata
 	tags := getTagsInType(returnType, "di")
 	for fieldName, tagValue := range tags {
 		for _, dependency := range dependenciesFound {
 			nameParts := strings.Split(dependency.Name, ".")
 			if nameParts[len(nameParts)-1] == tagValue {
-				fmt.Printf("Desambiguação: METADADO em %v em %s = %s", returnType, fieldName, tagValue)
+				fmt.Printf("Disambiguation: METADATA in %v on %s = %s", returnType, fieldName, tagValue)
 				return dependency
 			}
 		}
 	}
-	panic("Mais de um construtor encontrado para um mesmo tipo, Nenhum METADADO encontrado para resolver a ambiguidade")
+	panic("More than one constructor found for the same type, no METADATA found to resolve the ambiguity")
 	return DependencyBean{}
 }
 
-// Função para verificar se uma struct implementa uma interface
-func implementsInterface(structType reflect.Type, interfaceType reflect.Type) bool {
+// Checks whether a struct implements an interface
+func implementsInterface(structType, interfaceType reflect.Type) bool {
 	return structType.Implements(interfaceType)
 }
 
-func generateDependenciesArray(funcs []interface{}, isGlobal bool) map[string]DependencyBean {
+func generateDependenciesArray(funcs []any, isGlobal bool) map[string]DependencyBean {
 	ReflectTypeArray := make(map[string]DependencyBean)
 	for _, fn := range funcs {
 		dep := generateDependencyBean(fn, isGlobal)
@@ -57,12 +57,12 @@ func getReturnType(fnType reflect.Type) reflect.Type {
 	if fnType.NumOut() == 1 {
 		return fnType.Out(0)
 	} else {
-		message := fmt.Sprintf("Erro, a função %s deve possuir um único tipo de retrono \n", fnType.Name())
+		message := fmt.Sprintf("Error, the function %s must have a single return type\n", fnType.Name())
 		panic(message)
 	}
 }
 
-func generateDependencyBean(fn interface{}, isGlobal bool) DependencyBean {
+func generateDependencyBean(fn any, isGlobal bool) DependencyBean {
 	fnType := reflect.TypeOf(fn)
 	fnValue := reflect.ValueOf(fn)
 	nameFunction := getFunctionName(fnValue)
@@ -89,7 +89,7 @@ func getTagsInType(objectType reflect.Type, tagName string) map[string]string {
 	}
 	for i := 0; i < numField; i++ {
 		field := objectType.Field(i)
-		// obtem o metadado da tag
+		// get tag metadata
 		tagValue := field.Tag.Get(tagName)
 		fmt.Println("tagValue: ", tagValue)
 		tags[field.Name] = tagValue

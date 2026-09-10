@@ -3,14 +3,17 @@ package restserver
 import (
 	"testing"
 
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/config"
-	"github.com/colibri-project-io/colibri-sdk-go/pkg/base/observer"
-	"github.com/gofiber/fiber/v2"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/config"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/logging"
+	"github.com/colibriproject-dev/colibri-sdk-go/pkg/base/observer"
+	"github.com/gofiber/fiber/v3"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCloseServer(t *testing.T) {
+	logging.Initialize()
+
 	srv = &fiberWebServer{srv: &fiber.App{}}
 
 	restObserver{}.Close()
